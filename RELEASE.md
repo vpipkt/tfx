@@ -143,6 +143,7 @@
 *   Depends on `tensorflow-model-analysis>=0.29.0,<0.30.0`.
 *   Depends on `tensorflow-transform>=0.29.0,<0.30.0`.
 *   Depends on `tfx-bsl>=0.29.0,<0.30.0`.
+*   Update tests to ignore type ids.
 
 ## Documentation Updates
 

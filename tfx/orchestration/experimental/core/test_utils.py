@@ -28,44 +28,21 @@ from tfx.orchestration.portable.mlmd import execution_lib
 from tfx.proto.orchestration import pipeline_pb2
 
 
-def fake_example_gen_run_with_handle(mlmd_handle, example_gen, span, version):
-  """Writes fake example_gen output and successful execution to MLMD."""
-  output_example = types.Artifact(
-      example_gen.outputs.outputs['output_examples'].artifact_spec.type)
-  output_example.set_int_custom_property('span', span)
-  output_example.set_int_custom_property('version', version)
-  output_example.uri = 'my_examples_uri'
-  contexts = context_lib.prepare_contexts(mlmd_handle, example_gen.contexts)
-  execution = execution_publish_utils.register_execution(
-      mlmd_handle, example_gen.node_info.type, contexts)
-  execution_publish_utils.publish_succeeded_execution(
-      mlmd_handle, execution.id, contexts, {
-          'output_examples': [output_example],
-      })
-
-
 def fake_example_gen_run(mlmd_connection, example_gen, span, version):
   """Writes fake example_gen output and successful execution to MLMD."""
   with mlmd_connection as m:
-    fake_example_gen_run_with_handle(m, example_gen, span, version)
-
-
-def fake_component_output_with_handle(mlmd_handle,
-                                      component,
-                                      execution=None,
-                                      active=False):
-  """Writes fake component output and execution to MLMD."""
-  output_key, output_value = next(iter(component.outputs.outputs.items()))
-  output = types.Artifact(output_value.artifact_spec.type)
-  output.uri = str(uuid.uuid4())
-  contexts = context_lib.prepare_contexts(mlmd_handle, component.contexts)
-  if not execution:
+    output_example = types.Artifact(
+        example_gen.outputs.outputs['output_examples'].artifact_spec.type)
+    output_example.set_int_custom_property('span', span)
+    output_example.set_int_custom_property('version', version)
+    output_example.uri = 'my_examples_uri'
+    contexts = context_lib.prepare_contexts(m, example_gen.contexts)
     execution = execution_publish_utils.register_execution(
-        mlmd_handle, component.node_info.type, contexts)
-  if not active:
-    execution_publish_utils.publish_succeeded_execution(mlmd_handle,
-                                                        execution.id, contexts,
-                                                        {output_key: [output]})
+        m, example_gen.node_info.type, contexts)
+    execution_publish_utils.publish_succeeded_execution(
+        m, execution.id, contexts, {
+            'output_examples': [output_example],
+        })
 
 
 def fake_component_output(mlmd_connection,
@@ -74,7 +51,16 @@ def fake_component_output(mlmd_connection,
                           active=False):
   """Writes fake component output and execution to MLMD."""
   with mlmd_connection as m:
-    fake_component_output_with_handle(m, component, execution, active)
+    output_key, output_value = next(iter(component.outputs.outputs.items()))
+    output = types.Artifact(output_value.artifact_spec.type)
+    output.uri = str(uuid.uuid4())
+    contexts = context_lib.prepare_contexts(m, component.contexts)
+    if not execution:
+      execution = execution_publish_utils.register_execution(
+          m, component.node_info.type, contexts)
+    if not active:
+      execution_publish_utils.publish_succeeded_execution(
+          m, execution.id, contexts, {output_key: [output]})
 
 
 def get_node(pipeline, node_id):
