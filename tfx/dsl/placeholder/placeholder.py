@@ -16,12 +16,15 @@
 import abc
 import copy
 import enum
-from typing import Optional, Type, Union, cast
-from tfx import types
+from typing import Any, Optional, Type, Union, cast
+
+from tfx.dsl.experimental.conditionals import predicate
 from tfx.proto.orchestration import placeholder_pb2
 from tfx.utils import proto_utils
 
 from google.protobuf import message
+
+types = Any  # avoid circular dependencies during type checking.
 
 
 class _PlaceholderOperator(abc.ABC):
@@ -37,7 +40,7 @@ class _PlaceholderOperator(abc.ABC):
   def encode(
       self,
       sub_expression_pb: placeholder_pb2.PlaceholderExpression,
-      component_spec: Type[types.ComponentSpec] = None
+      component_spec: Type['types.ComponentSpec'] = None
   ) -> placeholder_pb2.PlaceholderExpression:
     pass
 
@@ -55,7 +58,7 @@ class _ArtifactUriOperator(_PlaceholderOperator):
   def encode(
       self,
       sub_expression_pb: placeholder_pb2.PlaceholderExpression,
-      component_spec: Optional[Type[types.ComponentSpec]] = None
+      component_spec: Optional[Type['types.ComponentSpec']] = None
   ) -> placeholder_pb2.PlaceholderExpression:
     del component_spec  # Unused by ArtifactUriOperator
 
@@ -75,7 +78,7 @@ class _ArtifactValueOperator(_PlaceholderOperator):
   def encode(
       self,
       sub_expression_pb: placeholder_pb2.PlaceholderExpression,
-      component_spec: Optional[Type[types.ComponentSpec]] = None
+      component_spec: Optional[Type['types.ComponentSpec']] = None
   ) -> placeholder_pb2.PlaceholderExpression:
     del component_spec  # Unused by ArtifactValueOperator
 
@@ -97,7 +100,7 @@ class _IndexOperator(_PlaceholderOperator):
   def encode(
       self,
       sub_expression_pb: placeholder_pb2.PlaceholderExpression,
-      component_spec: Optional[Type[types.ComponentSpec]] = None
+      component_spec: Optional[Type['types.ComponentSpec']] = None
   ) -> placeholder_pb2.PlaceholderExpression:
     del component_spec  # Unused by IndexOperator
 
@@ -121,7 +124,7 @@ class _ConcatOperator(_PlaceholderOperator):
   def encode(
       self,
       sub_expression_pb: placeholder_pb2.PlaceholderExpression,
-      component_spec: Optional[Type[types.ComponentSpec]] = None
+      component_spec: Optional[Type['types.ComponentSpec']] = None
   ) -> placeholder_pb2.PlaceholderExpression:
     del component_spec  # Unused by ConcatOperator
 
@@ -200,7 +203,7 @@ class _ProtoOperator(_PlaceholderOperator):
   def encode(
       self,
       sub_expression_pb: placeholder_pb2.PlaceholderExpression,
-      component_spec: Optional[Type[types.ComponentSpec]] = None
+      component_spec: Optional[Type['types.ComponentSpec']] = None
   ) -> placeholder_pb2.PlaceholderExpression:
     result = placeholder_pb2.PlaceholderExpression()
     result.operator.proto_op.expression.CopyFrom(sub_expression_pb)
@@ -245,7 +248,7 @@ class _Base64EncodeOperator(_PlaceholderOperator):
   def encode(
       self,
       sub_expression_pb: placeholder_pb2.PlaceholderExpression,
-      component_spec: Optional[Type[types.ComponentSpec]] = None
+      component_spec: Optional[Type['types.ComponentSpec']] = None
   ) -> placeholder_pb2.PlaceholderExpression:
     del component_spec  # Unused by B64EncodeOperator
 
@@ -271,6 +274,42 @@ class Placeholder(abc.ABC):
     self._operators.append(_ConcatOperator(left=left))
     return self
 
+  def __eq__(
+      self, other: Union[int, float, str,
+                         'Placeholder']) -> predicate.Predicate:
+    return predicate.Predicate.from_comparison(
+        predicate.CompareOp.EQUAL, left=self, right=other)
+
+  def __ne__(
+      self, other: Union[int, float, str,
+                         'Placeholder']) -> predicate.Predicate:
+    return predicate.Predicate.from_comparison(
+        predicate.CompareOp.NOT_EQUAL, left=self, right=other)
+
+  def __lt__(
+      self, other: Union[int, float, str,
+                         'Placeholder']) -> predicate.Predicate:
+    return predicate.Predicate.from_comparison(
+        predicate.CompareOp.LESS_THAN, left=self, right=other)
+
+  def __le__(
+      self, other: Union[int, float, str,
+                         'Placeholder']) -> predicate.Predicate:
+    return predicate.Predicate.from_comparison(
+        predicate.CompareOp.LESS_THAN_OR_EQUAL, left=self, right=other)
+
+  def __gt__(
+      self, other: Union[int, float, str,
+                         'Placeholder']) -> predicate.Predicate:
+    return predicate.Predicate.from_comparison(
+        predicate.CompareOp.GREATER_THAN, left=self, right=other)
+
+  def __ge__(
+      self, other: Union[int, float, str,
+                         'Placeholder']) -> predicate.Predicate:
+    return predicate.Predicate.from_comparison(
+        predicate.CompareOp.GREATER_THAN_OR_EQUAL, left=self, right=other)
+
   def __deepcopy__(self, memo):
     # This method is implemented to make sure Placeholder is deep copyable
     # by copy.deepcopy().
@@ -292,7 +331,7 @@ class Placeholder(abc.ABC):
 
   def encode(
       self,
-      component_spec: Optional[Type[types.ComponentSpec]] = None
+      component_spec: Optional[Type['types.ComponentSpec']] = None
   ) -> placeholder_pb2.PlaceholderExpression:
     """Encodes a placeholder as PlaceholderExpression proto.
 
@@ -540,3 +579,15 @@ def execution_invocation() -> ExecInvocationPlaceholder:
     proto.
   """
   return ExecInvocationPlaceholder()
+
+
+class ChannelWrappedPlaceholder(ArtifactPlaceholder):
+  """Wraps a Channel in a Placeholder.
+
+  This allows it to make Predicates using syntax like:
+    channel.future().value > 5
+  """
+
+  def __init__(self, channel: 'types.Channel'):
+    super().__init__(placeholder_pb2.Placeholder.Type.INPUT_ARTIFACT)
+    self.channel = channel
